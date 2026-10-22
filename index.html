@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>عداد الأرباح اليومي والشهري</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="header">
+        <h1>معدل الربح: 14,000 دج / ساعة</h1>
+    </div>
+
+    <div class="cards-container">
+        <!-- كارد أرباح اليوم -->
+        <div class="card">
+            <div class="card-title">أرباح ووقت اليوم</div>
+            <div class="card-amount"><span id="today-money">0.00</span> <span class="currency">دج</span></div>
+            <div class="timer-display">الوقت المنقضي اليوم: <span id="today-timer">00:00:00</span></div>
+        </div>
+
+        <!-- كارد المجموع الشهري -->
+        <div class="card monthly-card">
+            <div class="card-title">المجموع الكلي لهذا الشهر</div>
+            <div class="card-amount monthly-amount"><span id="month-money">0.00</span> <span class="currency monthly-currency">دج</span></div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button id="startBtn" class="btn-start" onclick="toggleTimer()">بدء العداد</button>
+        <button class="btn-reset" onclick="resetToday()">تصفير عداد اليوم فقط</button>
+    </div>
+
+    <script>
+        const ratePerSecond = 14000 / 3600;
+        let interval = null;
+        let isRunning = (localStorage.getItem('is_running') === 'true');
+        let lastTickTime = parseInt(localStorage.getItem('last_tick_time')) || Date.now();
+
+        function getTodayKey() {
+            const d = new Date();
+            return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        }
+
+        function getCurrentMonthPrefix() {
+            const d = new Date();
+            return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+        }
+
+        function getDailyRecords() {
+            return JSON.parse(localStorage.getItem('daily_records') || '{}');
+        }
+
+        function processTime() {
+            if (!isRunning) return;
+            const now = Date.now();
+            const diffSecs = Math.floor((now - lastTickTime) / 1000);
+            
+            if (diffSecs > 0) {
+                let records = getDailyRecords();
+                const today = getTodayKey();
+                
+                records[today] = (records[today] || 0) + diffSecs;
+                
+                localStorage.setItem('daily_records', JSON.stringify(records));
+                lastTickTime = now;
+                localStorage.setItem('last_tick_time', lastTickTime);
+            }
+        }
+
+        function updateUI() {
+            processTime();
+            let records = getDailyRecords();
+            const today = getTodayKey();
+            const monthPrefix = getCurrentMonthPrefix();
+
+            // 1. حساب أرباح ووقت اليوم
+            const todaySecs = records[today] || 0;
+            let t_hrs = Math.floor(todaySecs / 3600);
+            let t_mins = Math.floor((todaySecs % 3600) / 60);
+            let t_secs = todaySecs % 60;
+
+            document.getElementById('today-timer').innerText = 
+                `${String(t_hrs).padStart(2, '0')}:${String(t_mins).padStart(2, '0')}:${String(t_secs).padStart(2, '0')}`;
+            document.getElementById('today-money').innerText = (todaySecs * ratePerSecond).toFixed(2);
+
+            // 2. حساب المجموع الكلي للشهر الحالي
+            let monthTotalSecs = 0;
+            for (let dateKey in records) {
+                if (dateKey.startsWith(monthPrefix)) {
+                    monthTotalSecs += records[dateKey];
+                }
+            }
+            document.getElementById('month-money').innerText = (monthTotalSecs * ratePerSecond).toFixed(2);
+        }
+
+        function toggleTimer() {
+            const btn = document.getElementById('startBtn');
+            if (!isRunning) {
+                isRunning = true;
+                localStorage.setItem('is_running', 'true');
+                lastTickTime = Date.now();
+                localStorage.setItem('last_tick_time', lastTickTime);
+                
+                btn.innerText = "إيقاف مؤقت";
+                btn.className = "btn-stop";
+                
+                if (!interval) {
+                    interval = setInterval(updateUI, 1000);
+                }
+            } else {
+                processTime();
+                isRunning = false;
+                localStorage.setItem('is_running', 'false');
+                
+                btn.innerText = "بدء العداد";
+                btn.className = "btn-start";
+                clearInterval(interval);
+                interval = null;
+                updateUI();
+            }
+        }
+
+        function resetToday() {
+            if (confirm("هل تريد حقاً تصفير أرباح اليوم فقط؟")) {
+                let records = getDailyRecords();
+                const today = getTodayKey();
+                records[today] = 0;
+                localStorage.setItem('daily_records', JSON.stringify(records));
+                lastTickTime = Date.now();
+                localStorage.setItem('last_tick_time', lastTickTime);
+                updateUI();
+            }
+        }
+
+        window.onload = function() {
+            const btn = document.getElementById('startBtn');
+            if (isRunning) {
+                btn.innerText = "إيقاف مؤقت";
+                btn.className = "btn-stop";
+                interval = setInterval(updateUI, 1000);
+            } else {
+                btn.innerText = "بدء العداد";
+                btn.className = "btn-start";
+            }
+            updateUI();
+        };
+
+        document.addEventListener("visibilitychange", function() {
+            if (!document.hidden) {
+                updateUI();
+            }
+        });
+    </script>
+</body>
+</html>
